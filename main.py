@@ -7,13 +7,13 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from gdi_crawler.config import Config
-from gdi_crawler.pipeline import run_pipeline
+from crawler.config import Config
+from crawler.pipeline import run_pipeline
 
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="공공기관 홈페이지 문서(PDF/HWP/DOCX 등) 대량 다운로드 + Markdown 변환 파이프라인"
+        description="공공기관 홈페이지 문서(PDF/HWP/DOCX 등) 대량 다운로드 + 게시판 프로파일링 파이프라인"
     )
     p.add_argument("--base-url", required=True, help="사이트 루트 URL (예: https://gdi.re.kr)")
     p.add_argument("--start-path", default="/main", help="메뉴를 탐색할 시작 페이지 경로")
@@ -38,6 +38,11 @@ def parse_args() -> argparse.Namespace:
         "--limit-downloads-per-board", type=int, default=None,
         help="확정된 게시판마다 내려받을 파일 수 상한 (테스트용, 예: 1)",
     )
+    p.add_argument(
+        "--download-method", default="attachment",
+        choices=["attachment", "crawl", "api"],
+        help="게시판 프로파일 CSV의 download_method 값 (site별 config.yaml은 아직 없어 일괄 지정)",
+    )
     return p.parse_args()
 
 
@@ -55,6 +60,7 @@ def main() -> None:
         min_menu_relevance=args.min_menu_relevance,
         min_board_confidence=args.min_board_confidence,
         limit_downloads_per_board=args.limit_downloads_per_board,
+        download_method=args.download_method,
     )
     asyncio.run(run_pipeline(cfg, board_urls=args.boards))
 

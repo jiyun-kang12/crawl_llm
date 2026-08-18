@@ -38,6 +38,7 @@ class DownloadCandidate(BaseModel):
     context: str
     board_url: str
     strong_match: bool  # URL/확장자만으로 이미 문서 다운로드 링크임이 확실한 경우
+    referer: str | None = None  # Referer 검사로 직접 접근을 막는 사이트용 (예: korean.go.kr download.do)
 
 
 def looks_like_direct_download(url: str) -> bool:

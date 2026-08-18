@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlparse
 
 ALLOWED_EXTENSIONS = {"pdf", "hwp", "hwpx", "docx", "doc", "xlsx", "pptx"}
 CONVERTIBLE_EXTENSIONS = {"pdf", "docx", "doc", "xlsx", "pptx"}  # hwp/hwpx: 다운로드만, 변환은 생략
+DOWNLOAD_METHODS = ("attachment", "crawl", "api")
+PROFILE_SAMPLE_SIZE = 5
 
 
 @dataclass
@@ -24,6 +28,10 @@ class Config:
     min_menu_relevance: float = 0.5
     min_board_confidence: float = 0.6
 
+    # site별 config.yaml에서 읽어오는 대신, 이 실행에 포함된 모든 게시판에
+    # 일괄 적용하는 값. board_search 단계(게시판별 config.yaml)는 아직 없음.
+    download_method: str = "attachment"
+
     user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 gdi-doc-crawler/1.0"
@@ -40,9 +48,18 @@ class Config:
         return self.output_dir / "raw"
 
     @property
-    def markdown_dir(self) -> Path:
-        return self.output_dir / "markdown"
-
-    @property
     def manifest_path(self) -> Path:
         return self.output_dir / "manifest.json"
+
+    @property
+    def profile_csv_path(self) -> Path:
+        return self.output_dir / "board_profile.csv"
+
+    @property
+    def site_name(self) -> str:
+        host = urlparse(self.base_url).netloc.lower()
+        host = re.sub(r"^www\.", "", host)
+        return host or "site"
+
+    def samples_dir(self, board_name: str) -> Path:
+        return self.output_dir / "sites" / self.site_name / "samples" / board_name

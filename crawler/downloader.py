@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import re
+import ssl
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote
 
 import aiohttp
+import truststore
 
 from .board import DownloadCandidate
 from .config import Config
@@ -26,6 +28,19 @@ CONTENT_TYPE_TO_EXT = {
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
     "application/msword": "doc",
 }
+
+
+def build_client_session(cfg: Config) -> aiohttp.ClientSession:
+    """첨부파일 다운로드에 쓰는 aiohttp 세션을 만든다. OS 트러스트스토어로 SSL
+    검증한다 — python.org 빌드가 자체 CA 번들만 써서 서버가 중간 인증서를 안 보내는
+    사이트에서 인증서 체인 오류가 나는 걸 막는다 (Windows/macOS/Linux 모두 지원).
+    generic 파이프라인(pipeline.py)과 사이트별 스크립트(sites/*)가 이 세션 생성
+    로직과 download_candidate()를 그대로 공유한다."""
+    ssl_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    connector = aiohttp.TCPConnector(limit=cfg.concurrency, ssl=ssl_context)
+    timeout = aiohttp.ClientTimeout(total=cfg.request_timeout)
+    headers = {"User-Agent": cfg.user_agent}
+    return aiohttp.ClientSession(connector=connector, timeout=timeout, headers=headers)
 
 
 @dataclass
@@ -87,9 +102,15 @@ async def download_candidate(
 
     async with sem:
         last_error: str | None = None
+        # 일부 사이트(예: korean.go.kr)는 첨부 다운로드 URL에 Referer 검사를 걸어
+        # 직접 접근을 403으로 막는다 (실측 확인) — 게시글 상세 페이지 URL을
+        # Referer로 실어 보내면 통과한다.
+        req_headers = {"Referer": candidate.referer} if candidate.referer else None
         for attempt in range(3):
             try:
-                async with session.get(candidate.href, allow_redirects=True) as resp:
+                async with session.get(
+                    candidate.href, headers=req_headers, allow_redirects=True
+                ) as resp:
                     if resp.status != 200:
                         last_error = f"HTTP {resp.status}"
                         if attempt < 2:
